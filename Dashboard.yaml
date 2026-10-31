@@ -1,0 +1,80 @@
+type: entities
+title: Veiligheidsbewaking
+show_header_toggle: false
+entities:
+  - type: custom:template-entity-row
+    entity: input_boolean.veiligheidsbewaking_afwezig
+    name: Jan aanwezig/afwezig
+    icon: |
+      {% if is_state('input_boolean.veiligheidsbewaking_afwezig', 'off') %}
+        mdi:home-import-outline
+      {% else %}
+        mdi:home-export-outline
+      {% endif %}
+    state: |
+      {% if is_state('input_boolean.veiligheidsbewaking_afwezig', 'off') %}
+        Aanwezig
+      {% else %}
+        Afwezig
+      {% endif %}
+    tap_action:
+      action: none
+    card_mod:
+      style: |
+        .state {
+          color:
+          {% if is_state('input_boolean.veiligheidsbewaking_afwezig', 'on') %}
+            red
+          {% else %}
+            black
+          {% endif %};
+          font-weight: bold;
+        }
+  - entity: input_boolean.veiligheidsbewaking_pauze
+    name: Bewaking pauzeren
+    icon: mdi:pause
+    tap_action:
+      action: none
+  - type: custom:multiple-entity-row
+    entity: input_boolean.veiligheidsbewaking_nachtstand
+    name: Nachtstand (22:00–07:00)
+    icon: mdi:weather-night
+    show_state: true
+    tap_action:
+      action: none
+  - type: custom:multiple-entity-row
+    entity: input_boolean.veiligheidsbewaking_alarm
+    name: Alarm actief
+    icon: mdi:alarm-light
+    show_state: true
+    tap_action:
+      action: none
+    card_mod:
+      style: |
+        .state {
+          color:
+          {% if is_state('input_boolean.veiligheidsbewaking_alarm', 'on') %}
+            red
+          {% else %}
+            black
+          {% endif %};
+          font-weight: bold;
+        }
+  - type: custom:multiple-entity-row
+    entity: input_select.veiligheidsbewaking_fase
+    name: Fase alarm procedure
+    icon: mdi:shield-check
+    show_state: true
+    tap_action:
+      action: none
+  - type: custom:multiple-entity-row
+    entity: input_datetime.veiligheidsbewaking_deadline
+    name: Deadline reactietermijn
+    icon: mdi:clock-alert
+    show_state: true
+    tap_action:
+      action: none
+  - entity: timer.veiligheidsbewaking_activiteit
+    name: Timer / tijd resterend
+    tap_action:
+      action: none

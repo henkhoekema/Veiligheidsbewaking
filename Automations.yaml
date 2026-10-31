@@ -1,0 +1,740 @@
+  - id: veiligheidsbewaking_beweging
+    alias: Veiligheidsbewaking - Beweging
+    description: Start de controleperiode opnieuw na beweging
+    initial_state: true
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.m_s_hal_beweging
+          - binary_sensor.m_s_2_woonkamer_beweging
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: inactief
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+        data:
+          duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: restart
+
+
+# 2. TIMER VERLOPEN
+# Als de timer verloopt:
+#   - fase inactief: start de controle bij de bewoner.
+#   - andere fase: verwerk de deadline van de lopende procedure.
+# Tijdens pauze of nachtstand wordt niets gedaan.
+
+  - id: veiligheidsbewaking_timer_verlopen
+    alias: Veiligheidsbewaking - Timer verlopen
+    description: Verwerk het verlopen van de activiteit- of reactietimer
+    initial_state: true
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.veiligheidsbewaking_activiteit
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.veiligheidsbewaking_fase
+                state: inactief
+            sequence:
+              - action: script.veiligheidsbewaking_controle
+        default:
+          - action: script.veiligheidsbewaking_verwerk_deadline
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 3. DAGELIJKSE CONTROLE OM 09:00 UUR
+# De controle wordt alleen gestart als:
+#   - de bewaking niet gepauzeerd is;
+#   - de nachtstand uit staat;
+#   - er nog geen controle of escalatie loopt.
+
+  - id: veiligheidsbewaking_dagelijkse_controle
+    alias: Veiligheidsbewaking - Dagelijkse controle
+    description: Dagelijkse controle om 09.00 uur
+    initial_state: true
+    triggers:
+      - trigger: time
+        at: "09:00:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: inactief
+    actions:
+      - action: script.veiligheidsbewaking_controle
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 4. BEWAKING HANDMATIG PAUZEREN
+# De timer wordt gestopt, de procedure wordt teruggezet en
+# eventuele alarm- en bevestigingsstatussen worden gewist.
+
+  - id: veiligheidsbewaking_pauzeren
+    alias: Veiligheidsbewaking - Pauzeren
+    description: Stop de bewaking en een eventuele lopende alarmprocedure
+    initial_state: true
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        to: "on"
+    actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.veiligheidsbewaking_fase
+        data:
+          option: inactief
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_alarm
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_bevestiging
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 5. BEWAKING HANDMATIG HERVATTEN
+# Na het opheffen van de pauze start een nieuwe periode van 3 uur
+# Tijdens de nachtstand blijft de bewaking uitgeschakeld.
+# De automatisering voor 07:00 uur verzorgt de hervatting.
+
+  - id: veiligheidsbewaking_hervatten
+    alias: Veiligheidsbewaking - Hervatten
+    description: Start een nieuwe controleperiode na de pauze
+    initial_state: true
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.veiligheidsbewaking_fase
+        data:
+          option: inactief
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_alarm
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_bevestiging
+      - action: timer.start
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+        data:
+          duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 6. BEVESTIGING VAN DE BEWONER ONTVANGEN
+# De knop Alles in orde in de notificatie veroorzaakt het
+# event VEILIGHEID_OK. Alleen tijdens de juiste fase wordt
+# de bevestiging verwerkt.
+
+  - id: veiligheidsbewaking_bevestiging_ontvangen
+    alias: Veiligheidsbewaking - Bevestiging ontvangen
+    description: Verwerk de bevestigingsknop van de bewoner
+    initial_state: true
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VEILIGHEID_OK
+    conditions:
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: controle_bewoner
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_bevestiging
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 7. BEWONER HEEFT BEVESTIGD
+# De controle wordt afgerond. De alarmstatus wordt gewist
+# en er start een nieuwe activiteitperiode van 3 uur.
+
+  - id: veiligheidsbewaking_bewoner_bevestigd
+    alias: Veiligheidsbewaking - Bewoner bevestigd
+    description: Rond de controle af na bevestiging van de bewoner
+    initial_state: true
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.veiligheidsbewaking_bevestiging
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: controle_bewoner
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.veiligheidsbewaking_fase
+        data:
+          option: inactief
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_alarm
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_bevestiging
+      - action: notify.henk
+        data:
+          title: Veiligheidscontrole
+          message: Bevestiging ontvangen. De controle is afgerond.
+          data:
+            tag: veiligheidsbewaking
+            ttl: 0
+            priority: high
+            clickAction: "noAction"
+      - action: timer.start
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+        data:
+          duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 8. CONTACTPERSOON 1 BEVESTIGT
+
+  - id: veiligheidsbewaking_contact_1_bevestigd
+    alias: Veiligheidsbewaking - Contactpersoon 1 bevestigd
+    description: Stop de escalatie na bevestiging van contactpersoon 1
+    initial_state: true
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VEILIGHEID_CONTACT_1_ACK
+    conditions:
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: contactpersoon_1
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: script.veiligheidsbewaking_contact_bevestigd
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 9. CONTACTPERSOON 2 BEVESTIGT
+
+  - id: veiligheidsbewaking_contact_2_bevestigd
+    alias: Veiligheidsbewaking - Contactpersoon 2 bevestigd
+    description: Stop de escalatie na bevestiging van contactpersoon 2
+    initial_state: true
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VEILIGHEID_CONTACT_2_ACK
+    conditions:
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: contactpersoon_2
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: script.veiligheidsbewaking_contact_bevestigd
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 10. CONTACTPERSOON 3 BEVESTIGT
+
+  - id: veiligheidsbewaking_contact_3_bevestigd
+    alias: Veiligheidsbewaking - Contactpersoon 3 bevestigd
+    description: Stop de escalatie na bevestiging van contactpersoon 3
+    initial_state: true
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VEILIGHEID_CONTACT_3_ACK
+    conditions:
+      - condition: state
+        entity_id: input_select.veiligheidsbewaking_fase
+        state: contactpersoon_3
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      - action: script.veiligheidsbewaking_contact_bevestigd
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 11. NACHTSTAND STARTEN OM 22:00 UUR
+# De bewaking wordt bewust uitgeschakeld.
+# Een eventuele lopende procedure wordt beëindigd.
+
+  - id: veiligheidsbewaking_nachtstand_start
+    alias: Veiligheidsbewaking - Nachtstand starten
+    description: Schakel de bewaking om 22.00 uur uit voor de nacht
+    initial_state: true
+    triggers:
+      - trigger: time
+        at: "22:00:00"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      - action: timer.cancel
+        target:
+          entity_id: timer.veiligheidsbewaking_activiteit
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.veiligheidsbewaking_fase
+        data:
+          option: inactief
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_alarm
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_bevestiging
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 12. NACHTSTAND BEËINDIGEN OM 07:00 UUR
+# De nachtstand wordt opgeheven.
+# Als er geen handmatige pauze actief is, begint een nieuwe
+# activiteitperiode van 3 uur.
+
+  - id: veiligheidsbewaking_nachtstand_einde
+    alias: Veiligheidsbewaking - Nachtstand beëindigen
+    description: Hervat de bewaking om 07.00 uur
+    initial_state: true
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      - if:
+          - condition: state
+            entity_id: input_boolean.veiligheidsbewaking_pauze
+            state: "off"
+        then:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.veiligheidsbewaking_fase
+            data:
+              option: inactief
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.veiligheidsbewaking_alarm
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.veiligheidsbewaking_bevestiging
+          - action: timer.start
+            target:
+              entity_id: timer.veiligheidsbewaking_activiteit
+            data:
+              duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: single
+
+
+# 13. HERSTEL NA HERSTART VAN HOME ASSISTANT
+# Wacht 10 seconden zodat helpers en timers beschikbaar zijn.
+# Tijdens de nacht:
+#   - zet de nachtstand aan;
+#   - annuleer de timer;
+#   - beëindig een eventuele lopende procedure.
+# Overdag:
+#   - zet de nachtstand uit;
+#   - herstel een lopende procedure aan de hand van de deadline;
+#   - verstuur de bijbehorende melding opnieuw;
+#   - start een timer van 3 uur als er geen procedure loopt
+#     en de activiteitstimer niet actief is.
+
+  - id: veiligheidsbewaking_herstel_na_herstart
+    alias: Veiligheidsbewaking - Herstel na herstart
+    description: Hervat een lopende controle of escalatie na opstarten
+    initial_state: true
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:10"
+      # Bepaal of Home Assistant tijdens de nacht is gestart.
+      - choose:
+          - conditions:
+              - condition: time
+                after: "22:00:00"
+                before: "07:00:00"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_nachtstand
+              - action: timer.cancel
+                target:
+                  entity_id: timer.veiligheidsbewaking_activiteit
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.veiligheidsbewaking_fase
+                data:
+                  option: inactief
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_alarm
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_bevestiging
+        default:
+          # Overdag hoort de nachtstand uit te staan.
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.veiligheidsbewaking_nachtstand
+          # Een handmatige pauze heeft voorrang.
+          - if:
+              - condition: state
+                entity_id: input_boolean.veiligheidsbewaking_pauze
+                state: "off"
+            then:
+              - variables:
+                  fase: "{{ states('input_select.veiligheidsbewaking_fase') }}"
+                  deadline_ts: >-
+                    {{ as_timestamp(
+                      states('input_datetime.veiligheidsbewaking_deadline'), 0
+                    ) }}
+                  nu_ts: "{{ as_timestamp(now()) }}"
+                  resterend: >-
+                    {{ (
+                      as_timestamp(
+                        states('input_datetime.veiligheidsbewaking_deadline'), 0
+                      ) - as_timestamp(now())
+                    ) | int(0) }}
+              - choose:
+                  # Een lopende procedure heeft zijn deadline overschreden.
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ fase in [
+                            'controle_bewoner',
+                            'contactpersoon_1',
+                            'contactpersoon_2',
+                            'contactpersoon_3'
+                          ]
+                          and deadline_ts | float(0) > 0
+                          and deadline_ts | float(0) <= nu_ts | float(0) }}
+                    sequence:
+                      - action: script.veiligheidsbewaking_verwerk_deadline
+                  # Een lopende procedure heeft nog reactietijd over.
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ fase in [
+                            'controle_bewoner',
+                            'contactpersoon_1',
+                            'contactpersoon_2',
+                            'contactpersoon_3'
+                          ]
+                          and deadline_ts | float(0) > nu_ts | float(0) }}
+                    sequence:
+                      # Herstel de timer als deze niet meer loopt.
+                      - if:
+                          - condition: state
+                            entity_id: timer.veiligheidsbewaking_activiteit
+                            state: idle
+                        then:
+                          - action: timer.start
+                            target:
+                              entity_id: timer.veiligheidsbewaking_activiteit
+                            data:
+                              duration: >-
+                                {% set s = [1, resterend | int(1)] | max %}
+                                {{ '%02d:%02d:%02d' | format(
+                                  s // 3600,
+                                  (s % 3600) // 60,
+                                  s % 60
+                                ) }}
+                      # Verstuur de melding opnieuw na de herstart.
+                      - action: script.veiligheidsbewaking_verstuur_huidige_melding
+                default:
+                  # Er loopt geen controleprocedure.
+                  # Start een activiteitstimer als deze niet actief is.
+                  - if:
+                      - condition: state
+                        entity_id: input_select.veiligheidsbewaking_fase
+                        state: inactief
+                      - condition: state
+                        entity_id: timer.veiligheidsbewaking_activiteit
+                        state: idle
+                    then:
+                      - action: timer.start
+                        target:
+                          entity_id: timer.veiligheidsbewaking_activiteit
+                        data:
+                          duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: single
+
+# 14. BADKAMER CONTROLE
+# Controleert of er mogelijk sprake is van langdurig verblijf in de badkamer.
+# Na bewegingsdetectie wacht de automation maximaal 30 minuten op het openen
+# van de deur. Wordt de deur niet geopend en is de bewaking nog actief,
+# dan wordt via het ruimtemeldingsscript een waarschuwing verstuurd.
+# Tijdens de pauze of nachtstand wordt geen waarschuwing verstuurd.
+
+  - id: veiligheidsbewaking_badkamer_controle
+    alias: Veiligheidsbewaking - Controle badkamer
+    description: Waarschuw bij mogelijk langdurig verblijf in de badkamer
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.badkamer_beweging
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      # Wacht maximaal 30 minuten op het openen van de deur.
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: binary_sensor.badkamer_deur
+            to: "on"
+        timeout: "00:30:00"
+        continue_on_timeout: true
+      - choose:
+          # De deur is geopend: wacht tot deze weer sluit.
+          # We behandelen deze deurcyclus als een mogelijk vertrek.
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            sequence:
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: binary_sensor.badkamer_deur
+                    to: "off"
+        # De deur is binnen 30 minuten niet geopend.
+        # Controleer of de bewaking nog actief is en de deur dicht is.
+        default:
+          - condition: state
+            entity_id: input_boolean.veiligheidsbewaking_pauze
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.veiligheidsbewaking_nachtstand
+            state: "off"
+          - condition: state
+            entity_id: binary_sensor.badkamer_deur
+            state: "off"
+          - action: script.veiligheidsbewaking_ruimtemelding
+            data:
+              ruimte: badkamer
+    trace:
+      stored_traces: 10
+    mode: single
+
+# 15. TOILET CONTROLE
+# Controleert of er mogelijk sprake is van langdurig verblijf op het toilet.
+# Na bewegingsdetectie wacht de automation maximaal 30 minuten op het openen
+# van de deur. Wordt de deur niet geopend en is de bewaking nog actief,
+# dan wordt via het ruimtemeldingsscript een waarschuwing verstuurd.
+# Tijdens de pauze of nachtstand wordt geen waarschuwing verstuurd.
+
+  - id: veiligheidsbewaking_toilet_controle
+    alias: Veiligheidsbewaking - Controle toilet
+    description: Waarschuw bij mogelijk langdurig verblijf op het toilet
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.toilet_beweging
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_pauze
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.veiligheidsbewaking_nachtstand
+        state: "off"
+    actions:
+      # Wacht maximaal 30 minuten op het openen van de deur.
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: binary_sensor.toilet_deur
+            to: "on"
+        timeout: "00:30:00"
+        continue_on_timeout: true
+      - choose:
+          # De deur is geopend: wacht tot deze weer sluit.
+          # We behandelen deze deurcyclus als een mogelijk vertrek.
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            sequence:
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: binary_sensor.toilet_deur
+                    to: "off"
+        # De deur is binnen 30 minuten niet geopend.
+        # Controleer of de bewaking nog actief is en de deur dicht is.
+        default:
+          - condition: state
+            entity_id: input_boolean.veiligheidsbewaking_pauze
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.veiligheidsbewaking_nachtstand
+            state: "off"
+          - condition: state
+            entity_id: binary_sensor.toilet_deur
+            state: "off"
+          - action: script.veiligheidsbewaking_ruimtemelding
+            data:
+              ruimte: toilet
+    trace:
+      stored_traces: 10
+    mode: single
+
+# 16. AFWEZIGHEID
+# Pauzeert de veiligheidsbewaking automatisch wanneer Jan langer dan
+# twee minuten afwezig is. Bij thuiskomst wordt alleen de automatische
+# afwezigheidspauze opgeheven. Als de handmatige pauze en nachtstand
+# beide uitstaan, start de bewaking opnieuw met een timer van drie uur
+
+  - id: veiligheidsbewaking_afwezigheid
+    alias: Veiligheidsbewaking - Automatisch pauzeren bij afwezigheid
+    description: Pauzeer bij vertrek en hervat bij thuiskomst
+    triggers:
+      - trigger: state
+        entity_id: person.jan
+        from: "home"
+        to: "not_home"
+        for:
+          minutes: 2
+        id: vertrokken
+      - trigger: state
+        entity_id: person.jan
+        to: "home"
+        id: thuisgekomen
+    actions:
+      - choose:
+          # Bij vertrek: pauzeer de bewaking.
+          - conditions:
+              - condition: trigger
+                id: vertrokken
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_afwezig
+              - action: timer.cancel
+                target:
+                  entity_id: timer.veiligheidsbewaking_activiteit
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.veiligheidsbewaking_fase
+                data:
+                  option: inactief
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_alarm
+          # Bij thuiskomst: hef alleen de afwezigheidspauze op.
+          - conditions:
+              - condition: trigger
+                id: thuisgekomen
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.veiligheidsbewaking_afwezig
+              # Start opnieuw met drie uur als de gewone
+              # pauze en nachtstand allebei uitgeschakeld zijn.
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.veiligheidsbewaking_pauze
+                    state: "off"
+                  - condition: state
+                    entity_id: input_boolean.veiligheidsbewaking_nachtstand
+                    state: "off"
+                then:
+                  - action: timer.start
+                    target:
+                      entity_id: timer.veiligheidsbewaking_activiteit
+                    data:
+                      duration: "03:00:00"
+    trace:
+      stored_traces: 10
+    mode: single

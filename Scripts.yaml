@@ -1,0 +1,463 @@
+veiligheidsbewaking_controle:
+  alias: Veiligheidsbewaking - Controle bewoner
+  description: Vraag bevestiging en sla de reactiedeadline op
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.veiligheidsbewaking_bevestiging
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.veiligheidsbewaking_fase
+      data:
+        option: controle_bewoner
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.veiligheidsbewaking_deadline
+      data:
+        datetime: "{{ (now() + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}"
+    # Melding aan eigenaar/bewoner Jan.
+    - action: notify.mobile_app_jan
+      data:
+        title: Veiligheidscontrole
+        message: >-
+          Er is langere tijd geen beweging waargenomen.
+          Is alles in orde?
+        data:
+          tag: veiligheidsbewaking
+          ttl: 0
+          priority: high
+          clickAction: "noAction"
+          actions:
+            - action: VEILIGHEID_OK
+              title: Alles in orde
+    - action: timer.start
+      target:
+        entity_id: timer.veiligheidsbewaking_activiteit
+      data:
+        duration: "00:05:00"
+  mode: single
+
+
+veiligheidsbewaking_contactpersonen:
+  alias: Veiligheidsbewaking - Contactpersonen
+  description: Start de escalatie bij geen reactie van de bewoner
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.veiligheidsbewaking_alarm
+    - action: script.veiligheidsbewaking_start_contactpersoon
+      data:
+        contactnummer: 1
+  mode: single
+
+
+veiligheidsbewaking_start_contactpersoon:
+  alias: Veiligheidsbewaking - Start contactpersoon
+  description: Leg de fase en deadline vast en verstuur de melding
+  fields:
+    contactnummer:
+      name: Contactpersoonnummer
+      description: Nummer van de contactpersoon die aan de beurt is
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.veiligheidsbewaking_alarm
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.veiligheidsbewaking_fase
+      data:
+        option: "{{ 'contactpersoon_' ~ (contactnummer | int) }}"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.veiligheidsbewaking_deadline
+      data:
+        datetime: "{{ (now() + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}"
+    # Verstuur de melding uitsluitend naar de contactpersoon
+    # die op dat moment aan de beurt is.
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ contactnummer | int == 1 }}"
+          sequence:
+            - action: notify.mobile_app_contact1
+              data:
+                title: Veiligheidsalarm
+                message: >-
+                  De bewoner heeft niet gereageerd op de
+                  veiligheidscontrole. Neem contact op en bevestig
+                  dat je de situatie opvolgt.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_1_ACK
+                      title: Ik volg dit op
+        - conditions:
+            - condition: template
+              value_template: "{{ contactnummer | int == 2 }}"
+          sequence:
+            - action: notify.mobile_app_contact2
+              data:
+                title: Veiligheidsalarm
+                message: >-
+                  Contactpersoon 1 heeft niet binnen vijf minuten
+                  bevestigd. Neem contact op met de bewoner.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_2_ACK
+                      title: Ik volg dit op
+        - conditions:
+            - condition: template
+              value_template: "{{ contactnummer | int == 3 }}"
+          sequence:
+            - action: notify.mobile_app_contact3
+              data:
+                title: DRINGEND VEILIGHEIDSALARM
+                message: >-
+                  De eerdere contactpersonen hebben niet bevestigd.
+                  Neem zo snel mogelijk contact op met de bewoner
+                  en beoordeel of hulp nodig is.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_3_ACK
+                      title: Ik volg dit op
+    - action: timer.start
+      target:
+        entity_id: timer.veiligheidsbewaking_activiteit
+      data:
+        duration: "00:05:00"
+  mode: single
+
+
+veiligheidsbewaking_verwerk_deadline:
+  alias: Veiligheidsbewaking - Verwerk deadline
+  description: Ga naar de volgende fase als de reactietijd verstreken is
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+     
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - choose:
+        # Bewoner reageert niet: start contactpersoon 1.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: controle_bewoner
+          sequence:
+            - action: script.veiligheidsbewaking_contactpersonen
+        # Contactpersoon 1 reageert niet: start contactpersoon 2.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_1
+          sequence:
+            - action: script.veiligheidsbewaking_start_contactpersoon
+              data:
+                contactnummer: 2
+        # Contactpersoon 2 reageert niet: start contactpersoon 3.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_2
+          sequence:
+            - action: script.veiligheidsbewaking_start_contactpersoon
+              data:
+                contactnummer: 3
+        # Niemand heeft bevestigd: laat het alarm actief
+        # en waarschuw beheerder Piet.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_3
+          sequence:
+            - action: timer.cancel
+              target:
+                entity_id: timer.veiligheidsbewaking_activiteit
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.veiligheidsbewaking_fase
+              data:
+                option: alarm_onbevestigd
+            - action: notify.mobile_app_piet
+              data:
+                title: LET OP - Veiligheidsalarm
+                message: >-
+                  Geen van de drie contactpersonen heeft de melding
+                  bevestigd. De bewakingsstatus blijft op alarm staan.
+                  Controleer de situatie en onderneem zo nodig actie.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+  mode: single
+
+
+veiligheidsbewaking_contact_bevestigd:
+  alias: Veiligheidsbewaking - Contactpersoon bevestigd
+  description: Stop de escalatie wanneer een contactpersoon bevestigt
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - action: timer.cancel
+      target:
+        entity_id: timer.veiligheidsbewaking_activiteit
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.veiligheidsbewaking_fase
+      data:
+        option: inactief
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.veiligheidsbewaking_alarm
+    # Informeer eigenaar/bewoner Jan.
+    - action: notify.mobile_app_jan
+      data:
+        title: Veiligheidsalarm
+        message: Een contactpersoon heeft bevestigd de situatie op te volgen.
+        data:
+          tag: veiligheidsbewaking
+          ttl: 0
+          priority: high
+          clickAction: "noAction"
+    # Informeer ook beheerder Piet.
+    - action: notify.mobile_app_piet
+      data:
+        title: Veiligheidsalarm - Bevestigd
+        message: Een contactpersoon heeft bevestigd de situatie op te volgen.
+        data:
+          tag: veiligheidsbewaking
+          ttl: 0
+          priority: high
+          clickAction: "noAction"
+    # Hervat de reguliere bewaking met een timer van drie uur.
+    - action: timer.start
+      target:
+        entity_id: timer.veiligheidsbewaking_activiteit
+      data:
+        duration: "03:00:00"
+  mode: single
+
+
+veiligheidsbewaking_verstuur_huidige_melding:
+  alias: Veiligheidsbewaking - Herstel huidige melding
+  description: Verstuur de melding opnieuw na een Home Assistant-herstart
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    - choose:
+        # Herstelmelding voor eigenaar/bewoner Jan.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: controle_bewoner
+          sequence:
+            - action: notify.mobile_app_jan
+              data:
+                title: Veiligheidscontrole
+                message: >-
+                  Er is langere tijd geen beweging waargenomen.
+                  Is alles in orde?
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_OK
+                      title: Alles in orde
+        # Herstelmelding voor Contact1.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_1
+          sequence:
+            - action: notify.mobile_app_contact1
+              data:
+                title: Veiligheidsalarm
+                message: >-
+                  De bewoner heeft niet gereageerd op de
+                  veiligheidscontrole. Neem contact op en bevestig
+                  dat je de situatie opvolgt.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_1_ACK
+                      title: Ik volg dit op
+        # Herstelmelding voor Contact2.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_2
+          sequence:
+            - action: notify.mobile_app_contact2
+              data:
+                title: Veiligheidsalarm
+                message: >-
+                  Contactpersoon 1 heeft niet binnen vijf minuten
+                  bevestigd. Neem contact op met de bewoner.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_2_ACK
+                      title: Ik volg dit op
+        # Herstelmelding voor Contact3.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: contactpersoon_3
+          sequence:
+            - action: notify.mobile_app_contact3
+              data:
+                title: DRINGEND VEILIGHEIDSALARM
+                message: >-
+                  De eerdere contactpersonen hebben niet bevestigd.
+                  Neem zo snel mogelijk contact op met de bewoner
+                  en beoordeel of hulp nodig is.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+                  actions:
+                    - action: VEILIGHEID_CONTACT_3_ACK
+                      title: Ik volg dit op
+        # Een al onbevestigd alarm blijft zichtbaar bij Piet.
+        - conditions:
+            - condition: state
+              entity_id: input_select.veiligheidsbewaking_fase
+              state: alarm_onbevestigd
+          sequence:
+            - action: notify.mobile_app_piet
+              data:
+                title: LET OP - Veiligheidsalarm
+                message: >-
+                  Het veiligheidsalarm is nog steeds onbevestigd.
+                  Geen van de drie contactpersonen heeft de melding
+                  bevestigd. Controleer de situatie en onderneem
+                  zo nodig actie.
+                data:
+                  tag: veiligheidsbewaking
+                  ttl: 0
+                  priority: high
+                  clickAction: "noAction"
+  mode: single
+
+
+veiligheidsbewaking_ruimtemelding:
+  alias: Veiligheidsbewaking - Ruimtemelding
+  description: Verstuur een waarschuwing bij mogelijk langdurig verblijf in badkamer of toilet
+  fields:
+    ruimte:
+      name: Ruimte
+      description: De ruimte waarvoor de waarschuwing wordt verstuurd
+      required: true
+      selector:
+        select:
+          options:
+            - label: Badkamer
+              value: badkamer
+            - label: Toilet
+              value: toilet
+  sequence:
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_afwezig
+      state: "off"
+     - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_pauze
+      state: "off"
+    - condition: state
+      entity_id: input_boolean.veiligheidsbewaking_nachtstand
+      state: "off"
+    # Ruimtemeldingen gaan naar beheerder Piet.
+    - action: notify.mobile_app_piet
+      data:
+        title: >-
+          Veiligheidscontrole -
+          {{ 'Badkamer' if ruimte == 'badkamer' else 'Toilet' }}
+        message: >-
+          {% if ruimte == 'badkamer' %}
+            Er is mogelijk al 30 minuten iemand in de badkamer
+            zonder geregistreerd vertrek. Controleer of alles
+            in orde is.
+          {% elif ruimte == 'toilet' %}
+            Er is mogelijk al 30 minuten iemand op het toilet
+            zonder geregistreerd vertrek. Controleer of alles
+            in orde is.
+          {% endif %}
+        data:
+          tag: "veiligheidsbewaking_{{ ruimte }}"
+          ttl: 0
+          priority: high
+          clickAction: "noAction"
+  mode: parallel
+  max: 2
