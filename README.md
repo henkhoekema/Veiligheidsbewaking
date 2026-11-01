@@ -1,5 +1,5 @@
-| 🇩🇪 Deutsch | 🇬🇧 English | 🇳🇱 [Nederlands](README.md) | 🇫🇷 Français | 🇪🇸 Español |
-|:---:|:---:|:---:|:---:|:---:|
+| Deutsch | English | [Nederlands](README.md) |
+|:---:|:---:|:---:|
 
 ![Version](https://img.shields.io/badge/Version-1.0.0-red)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026%2B-blue.svg)](https://www.home-assistant.io/)
