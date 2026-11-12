@@ -30,9 +30,16 @@ entities:
           {% endif %};
           font-weight: bold;
         }
-  - entity: input_boolean.veiligheidsbewaking_pauze
+  - type: custom:template-entity-row
+    entity: input_boolean.veiligheidsbewaking_pauze
     name: Bewaking pauzeren
-    icon: mdi:pause
+    toggle: true
+    icon: |
+      {% if is_state('input_boolean.veiligheidsbewaking_pauze', 'off') %}
+        mdi:play
+      {% else %}
+        mdi:pause
+      {% endif %}
     tap_action:
       action: none
   - type: custom:multiple-entity-row
@@ -78,3 +85,4 @@ entities:
     name: Timer / tijd resterend
     tap_action:
       action: none
+
