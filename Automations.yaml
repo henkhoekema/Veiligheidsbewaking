@@ -1,7 +1,12 @@
+# 1. BEWEGING GEDETECTEERD
+# Bij beweging start of herstart de timer van 3 uur.
+# Dit gebeurt uitsluitend als de bewaking actief is en er
+# geen controle- of alarmprocedure loopt.
+
   - id: veiligheidsbewaking_beweging
     alias: Veiligheidsbewaking - Beweging
     description: Start de controleperiode opnieuw na beweging
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: state
         entity_id:
@@ -38,7 +43,7 @@
   - id: veiligheidsbewaking_timer_verlopen
     alias: Veiligheidsbewaking - Timer verlopen
     description: Verwerk het verlopen van de activiteit- of reactietimer
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: event
         event_type: timer.finished
@@ -75,7 +80,7 @@
   - id: veiligheidsbewaking_dagelijkse_controle
     alias: Veiligheidsbewaking - Dagelijkse controle
     description: Dagelijkse controle om 09.00 uur
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: time
         at: "09:00:00"
@@ -103,7 +108,7 @@
   - id: veiligheidsbewaking_pauzeren
     alias: Veiligheidsbewaking - Pauzeren
     description: Stop de bewaking en een eventuele lopende alarmprocedure
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: state
         entity_id: input_boolean.veiligheidsbewaking_pauze
@@ -136,7 +141,7 @@
   - id: veiligheidsbewaking_hervatten
     alias: Veiligheidsbewaking - Hervatten
     description: Start een nieuwe controleperiode na de pauze
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: state
         entity_id: input_boolean.veiligheidsbewaking_pauze
@@ -175,7 +180,7 @@
   - id: veiligheidsbewaking_bevestiging_ontvangen
     alias: Veiligheidsbewaking - Bevestiging ontvangen
     description: Verwerk de bevestigingsknop van de bewoner
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: event
         event_type: mobile_app_notification_action
@@ -207,7 +212,7 @@
   - id: veiligheidsbewaking_bewoner_bevestigd
     alias: Veiligheidsbewaking - Bewoner bevestigd
     description: Rond de controle af na bevestiging van de bewoner
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: state
         entity_id: input_boolean.veiligheidsbewaking_bevestiging
@@ -261,7 +266,7 @@
   - id: veiligheidsbewaking_contact_1_bevestigd
     alias: Veiligheidsbewaking - Contactpersoon 1 bevestigd
     description: Stop de escalatie na bevestiging van contactpersoon 1
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: event
         event_type: mobile_app_notification_action
@@ -289,7 +294,7 @@
   - id: veiligheidsbewaking_contact_2_bevestigd
     alias: Veiligheidsbewaking - Contactpersoon 2 bevestigd
     description: Stop de escalatie na bevestiging van contactpersoon 2
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: event
         event_type: mobile_app_notification_action
@@ -317,7 +322,7 @@
   - id: veiligheidsbewaking_contact_3_bevestigd
     alias: Veiligheidsbewaking - Contactpersoon 3 bevestigd
     description: Stop de escalatie na bevestiging van contactpersoon 3
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: event
         event_type: mobile_app_notification_action
@@ -347,7 +352,7 @@
   - id: veiligheidsbewaking_nachtstand_start
     alias: Veiligheidsbewaking - Nachtstand starten
     description: Schakel de bewaking om 22.00 uur uit voor de nacht
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: time
         at: "22:00:00"
@@ -382,7 +387,7 @@
   - id: veiligheidsbewaking_nachtstand_einde
     alias: Veiligheidsbewaking - Nachtstand beëindigen
     description: Hervat de bewaking om 07.00 uur
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: time
         at: "07:00:00"
@@ -432,7 +437,7 @@
   - id: veiligheidsbewaking_herstel_na_herstart
     alias: Veiligheidsbewaking - Herstel na herstart
     description: Hervat een lopende controle of escalatie na opstarten
-    initial_state: true
+    initial_state: false
     triggers:
       - trigger: homeassistant
         event: start
@@ -738,3 +743,6 @@
     trace:
       stored_traces: 10
     mode: single
+
+
+
