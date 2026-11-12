@@ -5,25 +5,31 @@ veiligheidsbewaking_controle:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
+      
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - action: input_boolean.turn_off
       target:
         entity_id: input_boolean.veiligheidsbewaking_bevestiging
+
     - action: input_select.select_option
       target:
         entity_id: input_select.veiligheidsbewaking_fase
       data:
         option: controle_bewoner
+
     - action: input_datetime.set_datetime
       target:
         entity_id: input_datetime.veiligheidsbewaking_deadline
       data:
         datetime: "{{ (now() + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
     # Melding aan eigenaar/bewoner Jan.
     - action: notify.mobile_app_jan
       data:
@@ -39,11 +45,13 @@ veiligheidsbewaking_controle:
           actions:
             - action: VEILIGHEID_OK
               title: Alles in orde
+
     - action: timer.start
       target:
         entity_id: timer.veiligheidsbewaking_activiteit
       data:
         duration: "00:05:00"
+
   mode: single
 
 
@@ -54,18 +62,23 @@ veiligheidsbewaking_contactpersonen:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
+      
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - action: input_boolean.turn_on
       target:
         entity_id: input_boolean.veiligheidsbewaking_alarm
+
     - action: script.veiligheidsbewaking_start_contactpersoon
       data:
         contactnummer: 1
+
   mode: single
 
 
@@ -82,29 +95,36 @@ veiligheidsbewaking_start_contactpersoon:
           min: 1
           max: 3
           mode: box
+
   sequence:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - action: input_boolean.turn_on
       target:
         entity_id: input_boolean.veiligheidsbewaking_alarm
+
     - action: input_select.select_option
       target:
         entity_id: input_select.veiligheidsbewaking_fase
       data:
         option: "{{ 'contactpersoon_' ~ (contactnummer | int) }}"
+
     - action: input_datetime.set_datetime
       target:
         entity_id: input_datetime.veiligheidsbewaking_deadline
       data:
         datetime: "{{ (now() + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
     # Verstuur de melding uitsluitend naar de contactpersoon
     # die op dat moment aan de beurt is.
     - choose:
@@ -127,6 +147,7 @@ veiligheidsbewaking_start_contactpersoon:
                   actions:
                     - action: VEILIGHEID_CONTACT_1_ACK
                       title: Ik volg dit op
+
         - conditions:
             - condition: template
               value_template: "{{ contactnummer | int == 2 }}"
@@ -145,6 +166,7 @@ veiligheidsbewaking_start_contactpersoon:
                   actions:
                     - action: VEILIGHEID_CONTACT_2_ACK
                       title: Ik volg dit op
+
         - conditions:
             - condition: template
               value_template: "{{ contactnummer | int == 3 }}"
@@ -164,11 +186,13 @@ veiligheidsbewaking_start_contactpersoon:
                   actions:
                     - action: VEILIGHEID_CONTACT_3_ACK
                       title: Ik volg dit op
+
     - action: timer.start
       target:
         entity_id: timer.veiligheidsbewaking_activiteit
       data:
         duration: "00:05:00"
+
   mode: single
 
 
@@ -179,13 +203,15 @@ veiligheidsbewaking_verwerk_deadline:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
-     
+      
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - choose:
         # Bewoner reageert niet: start contactpersoon 1.
         - conditions:
@@ -194,6 +220,7 @@ veiligheidsbewaking_verwerk_deadline:
               state: controle_bewoner
           sequence:
             - action: script.veiligheidsbewaking_contactpersonen
+
         # Contactpersoon 1 reageert niet: start contactpersoon 2.
         - conditions:
             - condition: state
@@ -203,6 +230,7 @@ veiligheidsbewaking_verwerk_deadline:
             - action: script.veiligheidsbewaking_start_contactpersoon
               data:
                 contactnummer: 2
+
         # Contactpersoon 2 reageert niet: start contactpersoon 3.
         - conditions:
             - condition: state
@@ -212,6 +240,7 @@ veiligheidsbewaking_verwerk_deadline:
             - action: script.veiligheidsbewaking_start_contactpersoon
               data:
                 contactnummer: 3
+
         # Niemand heeft bevestigd: laat het alarm actief
         # en waarschuw beheerder Piet.
         - conditions:
@@ -222,11 +251,13 @@ veiligheidsbewaking_verwerk_deadline:
             - action: timer.cancel
               target:
                 entity_id: timer.veiligheidsbewaking_activiteit
+
             - action: input_select.select_option
               target:
                 entity_id: input_select.veiligheidsbewaking_fase
               data:
                 option: alarm_onbevestigd
+
             - action: notify.mobile_app_piet
               data:
                 title: LET OP - Veiligheidsalarm
@@ -239,6 +270,7 @@ veiligheidsbewaking_verwerk_deadline:
                   ttl: 0
                   priority: high
                   clickAction: "noAction"
+
   mode: single
 
 
@@ -249,23 +281,29 @@ veiligheidsbewaking_contact_bevestigd:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
+      
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - action: timer.cancel
       target:
         entity_id: timer.veiligheidsbewaking_activiteit
+
     - action: input_select.select_option
       target:
         entity_id: input_select.veiligheidsbewaking_fase
       data:
         option: inactief
+
     - action: input_boolean.turn_off
       target:
         entity_id: input_boolean.veiligheidsbewaking_alarm
+
     # Informeer eigenaar/bewoner Jan.
     - action: notify.mobile_app_jan
       data:
@@ -276,6 +314,7 @@ veiligheidsbewaking_contact_bevestigd:
           ttl: 0
           priority: high
           clickAction: "noAction"
+
     # Informeer ook beheerder Piet.
     - action: notify.mobile_app_piet
       data:
@@ -286,12 +325,14 @@ veiligheidsbewaking_contact_bevestigd:
           ttl: 0
           priority: high
           clickAction: "noAction"
+
     # Hervat de reguliere bewaking met een timer van drie uur.
     - action: timer.start
       target:
         entity_id: timer.veiligheidsbewaking_activiteit
       data:
         duration: "03:00:00"
+
   mode: single
 
 
@@ -302,12 +343,15 @@ veiligheidsbewaking_verstuur_huidige_melding:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
+      
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     - choose:
         # Herstelmelding voor eigenaar/bewoner Jan.
         - conditions:
@@ -329,6 +373,7 @@ veiligheidsbewaking_verstuur_huidige_melding:
                   actions:
                     - action: VEILIGHEID_OK
                       title: Alles in orde
+
         # Herstelmelding voor Contact1.
         - conditions:
             - condition: state
@@ -350,6 +395,7 @@ veiligheidsbewaking_verstuur_huidige_melding:
                   actions:
                     - action: VEILIGHEID_CONTACT_1_ACK
                       title: Ik volg dit op
+
         # Herstelmelding voor Contact2.
         - conditions:
             - condition: state
@@ -370,6 +416,7 @@ veiligheidsbewaking_verstuur_huidige_melding:
                   actions:
                     - action: VEILIGHEID_CONTACT_2_ACK
                       title: Ik volg dit op
+
         # Herstelmelding voor Contact3.
         - conditions:
             - condition: state
@@ -391,6 +438,7 @@ veiligheidsbewaking_verstuur_huidige_melding:
                   actions:
                     - action: VEILIGHEID_CONTACT_3_ACK
                       title: Ik volg dit op
+
         # Een al onbevestigd alarm blijft zichtbaar bij Piet.
         - conditions:
             - condition: state
@@ -410,6 +458,7 @@ veiligheidsbewaking_verstuur_huidige_melding:
                   ttl: 0
                   priority: high
                   clickAction: "noAction"
+
   mode: single
 
 
@@ -428,16 +477,20 @@ veiligheidsbewaking_ruimtemelding:
               value: badkamer
             - label: Toilet
               value: toilet
+
   sequence:
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_afwezig
       state: "off"
-     - condition: state
+      
+    - condition: state
       entity_id: input_boolean.veiligheidsbewaking_pauze
       state: "off"
+
     - condition: state
       entity_id: input_boolean.veiligheidsbewaking_nachtstand
       state: "off"
+
     # Ruimtemeldingen gaan naar beheerder Piet.
     - action: notify.mobile_app_piet
       data:
@@ -459,5 +512,8 @@ veiligheidsbewaking_ruimtemelding:
           ttl: 0
           priority: high
           clickAction: "noAction"
+
   mode: parallel
   max: 2
+
+  
