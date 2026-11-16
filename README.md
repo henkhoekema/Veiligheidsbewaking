@@ -267,6 +267,12 @@ Gebruik dit als extra hulpmiddel, test het regelmatig en maak met de bewoner, be
 
 ---
 
+## Entity-ID's aanpassen
+
+De entity-ID's in dit project zijn voorbeelden uit mijn eigen Home Assistant-installatie. Vervang deze door de overeenkomstige entity-ID's uit jouw eigen installatie. Controleer daarbij alle YAML-bestanden, inclusief de templates, automatiseringen en het dashboard. Let ook op de gebruikte notificatieservices en helpers.
+
+Hoe je dit eenvoudig kunt doen, lees je in mijn aparte handleiding: [Entities – Entity-ID's aanpassen](https://github.com/henkhoekema/Entities).
+
 ## Licentie en gebruiksvoorwaarden
 
 Deze automatisering mag vrij worden gebruikt en aangepast voor eigen gebruik.
